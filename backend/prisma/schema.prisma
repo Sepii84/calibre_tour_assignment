@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Hotel {
+  id        Int        @id @default(autoincrement())
+  name      String
+  city      String
+  rooms     Room[]
+  contracts Contract[]
+}
+
+model Room {
+  id          Int    @id @default(autoincrement())
+  hotelId     Int
+  code        String
+  name        String
+  maxAdults   Int
+  maxChildren Int
+  hotel       Hotel  @relation(fields: [hotelId], references: [id])
+  rates       Rate[]
+
+  @@unique([hotelId, code])
+}
+
+model BoardType {
+  code  String @id
+  name  String
+  rates Rate[]
+}
+
+model Contract {
+  id       Int      @id @default(autoincrement())
+  hotelId  Int
+  name     String
+  currency String
+  hotel    Hotel    @relation(fields: [hotelId], references: [id])
+  seasons  Season[]
+}
+
+model Season {
+  id         Int      @id @default(autoincrement())
+  contractId Int
+  name       String
+  startDate  DateTime
+  endDate    DateTime
+  contract   Contract @relation(fields: [contractId], references: [id])
+  rates      Rate[]
+
+  @@unique([contractId, name])
+}
+
+model Rate {
+  id            Int       @id @default(autoincrement())
+  seasonId      Int
+  roomId        Int
+  boardTypeCode String
+  adults        Int
+  children      Int
+  price         Float
+  season        Season    @relation(fields: [seasonId], references: [id])
+  room          Room      @relation(fields: [roomId], references: [id])
+  boardType     BoardType @relation(fields: [boardTypeCode], references: [code])
+
+  @@unique([seasonId, roomId, boardTypeCode, adults, children])
+}
