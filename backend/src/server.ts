@@ -35,7 +35,7 @@ app.get("/rooms/:id", async (req, res) => {
     try {
         const room = await prisma.room.findUnique({
             where: { id: roomId },
-            include: { rates: { include: { boardType: true, season: true } } },
+            include: { rates: true },
         });
         if (!room) {
             res.status(404).json({ error: "Room not found" });

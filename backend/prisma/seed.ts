@@ -1,6 +1,40 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma, type BoardType, type Room, type Season } from "@prisma/client";
 
 const prisma = new PrismaClient();
+
+function generateRatesForRoom(room: Room, seasons: Season[], boardTypes: BoardType[]): Prisma.RateCreateManyInput[] {
+    const rates: Prisma.RateCreateManyInput[] = [];
+    for (const season of seasons) {
+        for (const boardType of boardTypes) {
+            for (let adults = 1; adults <= room.maxAdults; adults++) {
+                for (let children = 0; children <= room.maxChildren; children++) {
+                    if (adults === 1 && children == 1) {
+                        continue
+                    }
+                    let price: number = 0;
+                    if (boardType.code === "BB") {
+                        price = room.code === "STD" ? 90 + (adults + children) * 20 : 130 + (adults + children) * 20;
+                    }
+                    else {
+                        price = room.code === "STD" ? 125 + (adults + children) * 20 : 165 + (adults + children) * 20;
+                    }
+                    if (season.name === "Low Season") {
+                        price -= 40;
+                    }
+                    rates.push({
+                        seasonId: season.id,
+                        roomId: room.id,
+                        boardTypeCode: boardType.code,
+                        adults,
+                        children,
+                        price
+                    });
+                }
+            }
+        }
+    }
+    return rates;
+}
 
 async function main() {
 
@@ -71,56 +105,12 @@ async function main() {
             endDate: new Date("2026-09-15T00:00:00.000Z")
         }
     });
+    const seasons = [lowSeason, highSeason]
+    const boardTypes = await prisma.boardType.findMany();
     await prisma.rate.createMany({
         data: [
-            { 
-                seasonId: lowSeason.id, 
-                roomId: STDroom.id, 
-                boardTypeCode: "BB", 
-                adults: 2, 
-                children: 0, 
-                price: 90 
-            },
-            { 
-                seasonId: highSeason.id, 
-                roomId: STDroom.id, 
-                boardTypeCode: "BB", 
-                adults: 1, 
-                children: 0, 
-                price: 110 
-            },
-            { 
-                seasonId: highSeason.id, 
-                roomId: STDroom.id, 
-                boardTypeCode: "BB", 
-                adults: 2, 
-                children: 0, 
-                price: 130 
-            },
-            { 
-                seasonId: highSeason.id, 
-                roomId: STDroom.id, 
-                boardTypeCode: "BB", 
-                adults: 2, 
-                children: 1, 
-                price: 150 
-            },
-            { 
-                seasonId: highSeason.id, 
-                roomId: STDroom.id, 
-                boardTypeCode: "HB", 
-                adults: 2, 
-                children: 0, 
-                price: 165 
-            },
-            { 
-                seasonId: highSeason.id, 
-                roomId: FAMroom.id, 
-                boardTypeCode: "BB", 
-                adults: 2, 
-                children: 2, 
-                price: 210 
-            },
+            ...generateRatesForRoom(STDroom, seasons, boardTypes),
+            ...generateRatesForRoom(FAMroom, seasons, boardTypes),
         ]
     });
 }

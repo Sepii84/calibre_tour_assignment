@@ -45,7 +45,7 @@ async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 
     if (!response.ok) {
       setResults([]);
-      setMessage(data.error || "Search failed");
+      setMessage(data.error || "Please make sure the backend server is running on http://localhost:3001");
       setHasSearched(true);
       return;
     }
