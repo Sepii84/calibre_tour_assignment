@@ -1,8 +1,17 @@
 import express from "express";
 import cors from "cors";
-import { PrismaClient, type Season, type Room, type Rate, type Contract} from "@prisma/client";
+import { PrismaClient, type Season, type Room, type Rate, type Contract } from "@prisma/client";
+import { z } from "zod";
 
 const prisma = new PrismaClient();
+
+const availabilityQuerySchema = z.object({
+    checkIn: z.string().min(1),
+    checkOut: z.string().min(1),
+    boardType: z.enum(["BB", "HB"]),
+    adults: z.coerce.number().int().min(1),
+    children: z.coerce.number().int().min(0),
+});
 
 const app = express();
 app.use(cors());
@@ -67,11 +76,6 @@ function parseDate(dateString: string): Date | null {
 function calculateNights(checkIn: Date, checkOut: Date): number {
   const millisecondsDifference = checkOut.getTime() - checkIn.getTime();
   return millisecondsDifference / (1000 * 60 * 60 * 24);
-}
-
-function isValidBoardType(boardType: string): boolean {
-    const validBoardTypes = ["BB", "HB"];
-    return validBoardTypes.includes(boardType);
 }
 
 function findSeasonForStay(
@@ -153,44 +157,42 @@ function searchAvailableRoomsWithPrice(
 app.get("/availability", async (req, res) => {
     
     try {
-        const { checkIn, checkOut, boardType, adults, children } = req.query;
+        const parsedQuery = availabilityQuerySchema.safeParse(req.query);
 
-        if (!checkIn || !checkOut || !boardType || adults === undefined || children === undefined) {
-            res.status(400).json({ error: "Missing query parameters" });
+        if (!parsedQuery.success) {
+            res.status(400).json({ error: "Invalid query parameters" });
             return;
         }
 
-        const adultsNum = Number(adults);
-        const childrenNum = Number(children);
-        const checkInDate = parseDate(checkIn as string);
-        const checkOutDate = parseDate(checkOut as string);
+        const { checkIn, checkOut, boardType, adults, children } = parsedQuery.data;
+
+        const checkInDate = parseDate(checkIn);
+        const checkOutDate = parseDate(checkOut);
 
         if (
-            Number.isNaN(adultsNum) || 
-            Number.isNaN(childrenNum) || 
-            !Number.isInteger(adultsNum) ||
-            !Number.isInteger(childrenNum) ||
             !checkInDate || 
             !checkOutDate || 
-            !isValidBoardType(boardType as string) || 
-            adultsNum <= 0 || 
-            childrenNum < 0 || 
             checkInDate >= checkOutDate
         ) {
             res.status(400).json({ error: "Invalid query parameters" });
             return;
         }
 
-        const results = await searchAvailableRoomsWithPrice(
-            await prisma.room.findMany(),
-            await prisma.rate.findMany(),
-            await prisma.season.findMany(),
-            await prisma.contract.findMany(),
+        const rooms = await prisma.room.findMany();
+        const rates = await prisma.rate.findMany();
+        const seasons = await prisma.season.findMany();
+        const contracts = await prisma.contract.findMany();
+
+        const results = searchAvailableRoomsWithPrice(
+            rooms,
+            rates, 
+            seasons,
+            contracts,
             checkInDate,
             checkOutDate,
-            boardType as string,
-            adultsNum,
-            childrenNum
+            boardType,
+            adults,
+            children
         );
         res.json(results);
 
