@@ -73,22 +73,6 @@ function parseDate(dateString: string): Date | null {
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function calculateNights(checkIn: Date, checkOut: Date): number {
-  const millisecondsDifference = checkOut.getTime() - checkIn.getTime();
-  return millisecondsDifference / (1000 * 60 * 60 * 24);
-}
-
-function findSeasonForStay(
-  seasons: Season[],
-  checkIn: Date,
-  checkOut: Date
-): Season | undefined {
-  return seasons.find(season =>
-    checkIn >= season.startDate &&
-    checkOut <= season.endDate
-  );
-}
-
 function roomFitsGuests(
     room: Room, 
     adults: number, 
@@ -120,6 +104,34 @@ function findExactRate(
         );
 }
 
+function addDays(date: Date, days: number): Date {
+    const copy = new Date(date);
+    copy.setUTCDate(copy.getUTCDate() + days);
+    return copy;
+}
+
+function getStayNights(checkIn: Date, checkOut: Date): Date[] {
+    const nights: Date[] = [];
+    for (
+        let current = new Date(checkIn);
+        current < checkOut;
+        current = addDays(current, 1)
+    ) {
+        nights.push(new Date(current));
+    }
+    return nights;
+}
+
+function findSeasonForNight(
+    seasons: Season[],
+    night: Date
+): Season | undefined {
+    return seasons.find(season =>
+        night >= season.startDate &&
+        night <= season.endDate
+    );
+}
+
 function searchAvailableRoomsWithPrice(
   rooms: Room[],
   rates: Rate[],
@@ -131,31 +143,53 @@ function searchAvailableRoomsWithPrice(
   adults: number,
   children: number
 ): AvailableRoomWithPrice[] {
-    const season = findSeasonForStay(seasons, checkIn, checkOut);
-    if (!season) {
-        return [];
-    }
-    const nights = calculateNights(checkIn, checkOut);
+    const nights = getStayNights(checkIn, checkOut);
+
     return rooms
         .filter(room => roomFitsGuests(room, adults, children))
-        .filter(room => findExactRate(rates, season.id, room.id, boardCode, adults, children) !== undefined)
-        .map(room => { 
-                const rate = findExactRate(rates, season.id, room.id, boardCode, adults, children);
-                return {
-                    roomId: room.id,
-                    roomCode: room.code, 
-                    roomName: room.name, 
-                    boardTypeCode: boardCode,
-                    currency: contracts.find(contract => contract.id === season.contractId)!.currency,
-                    nightlyPrice: rate!.price, 
-                    nights, 
-                    totalPrice: rate!.price * nights
-                };
-            });
+        .map(room => {
+
+            let totalPrice = 0;
+            let currency = "";
+
+            for (const night of nights) {
+
+                const season = findSeasonForNight(seasons, night);
+                if (!season) { return undefined; }
+
+                const rate = findExactRate(
+                    rates,
+                    season.id,
+                    room.id,
+                    boardCode,
+                    adults,
+                    children
+                );
+                if (!rate) { return undefined; }
+
+                const contract = contracts.find(
+                    contract => contract.id === season.contractId
+                );
+                if (!contract) { return undefined; }
+                
+                totalPrice += rate.price;
+                currency = contract.currency;
+            }
+            return {
+                roomId: room.id,
+                roomCode: room.code,
+                roomName: room.name,
+                boardTypeCode: boardCode,
+                currency,
+                nightlyPrice: totalPrice / nights.length,
+                nights: nights.length,
+                totalPrice
+            };
+        })
+        .filter((result): result is AvailableRoomWithPrice => result !== undefined);
 }
 
 app.get("/availability", async (req, res) => {
-    
     try {
         const parsedQuery = availabilityQuerySchema.safeParse(req.query);
 
