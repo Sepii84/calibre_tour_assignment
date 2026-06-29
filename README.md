@@ -305,7 +305,7 @@ No available rooms
 
 This is intentional. Even if a room can physically fit the guests, it is not returned unless an exact rate exists.
 
-### Cross-season pricing bonus
+### Bonus 1: Cross-season pricing bonus
 
 ```txt
 checkIn: 2026-06-14
@@ -341,7 +341,7 @@ Total = 600 EUR
 Average nightly price = 150 EUR
 ```
 
-## Validation
+## Bonus 2: Validation
 
 The backend uses Zod to validate availability search query parameters.
 
